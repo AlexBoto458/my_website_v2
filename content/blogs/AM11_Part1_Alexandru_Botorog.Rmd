@@ -1,0 +1,403 @@
+---
+title: "AM11 Final Assignment Part 1"
+author: "Alexandru Botorog"
+date: "2023-02-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(tidyverse)
+library(recommenderlab)
+library(ggplot2)                       
+library(data.table)
+library(reshape2)
+library(Matrix)
+
+knitr::opts_chunk$set(
+  tidy = FALSE,   # display code as typed
+  size = "small") # slightly smaller font for code
+```
+
+### Data Loading
+
+```{r data_loading, message=FALSE, warning=FALSE}
+
+# Loading main dataset in "rating_data" object
+rating_data <- fread("ratings.csv")
+
+# Loading movies dataset in "movie_data" object
+movie_data <- fread("movies.csv",stringsAsFactors=FALSE)
+```
+
+### Data Cleaning
+
+```{r data_cleaning, message=FALSE, warning=FALSE}
+rating_data <- rating_data %>%
+  select(-timestamp)
+
+
+#Check if there are duplicate movieIds (multiple Ids for the same movie)
+movie_data%>%
+  group_by(title)%>%
+  count()%>%
+  filter(n>1)%>%
+  group_by(n)%>%
+  count()
+
+#There are 98 movies which have 2 movie IDs
+
+#Remove duplicates from movie_data and assign a unique movie Id in rating_data 
+duplicate_movies <- names(which(table(movie_data$title) > 1)) 
+removeRows <- integer()
+for(i in duplicate_movies){
+  repeatMovieLoc <- which(movie_data$title == i)
+  tempGenre <- paste(movie_data$genres[repeatMovieLoc], collapse="|")
+  tempGenre <- paste(unique(unlist(strsplit(tempGenre, split = "\\|")[[1]])), collapse = "|")
+  movie_data$genres[repeatMovieLoc[1]] <- tempGenre
+
+  ##### REMOVE REPEATS IN RATING DATA ####
+  repeatMovieIdLoc <- which(rating_data$movieId %in% movie_data$movieId[repeatMovieLoc[-1]])
+  rating_data$movieId[repeatMovieIdLoc] <- movie_data$movieId[repeatMovieLoc[1]]
+  
+  removeRows <- c(removeRows, repeatMovieLoc[-1])
+}
+movie_data <- movie_data[-removeRows,]
+
+#Check if multiple ratings from the same user for a single movie
+nrow(rating_data)-nrow(rating_data%>%select(userId, movieId)%>%distinct())
+
+#Only keep maximum rating from each user
+rating_data<-rating_data %>%arrange(desc(rating))%>%distinct(userId, movieId, .keep_all = TRUE)
+
+
+
+```
+
+# Step 1: Exploratory Data Analysis
+
+
+```{r exploratory_data_analysis_a, message=FALSE, warning=FALSE}
+#Build a histogram of show frequency (of ratings) of all movies
+rating_data%>%
+  group_by(movieId)%>%
+  count()%>%
+  ggplot()+aes(x=n)+geom_histogram(binwidth = 1000)+
+  labs(title="Histogram of the number of ratings for all movies", x="Number of ratings", y="Number of movies")
+
+#filtering out movie with fewer than 1k ratings to zoom plot
+rating_data%>%
+  group_by(movieId)%>%
+  count()%>%
+  filter(n>1000)%>%
+  ggplot()+aes(x=n)+geom_histogram(binwidth = 1000)+
+  labs(title="Histogram of the number of ratings for al movies", x="Number of ratings", y="Number of movies")
+```
+```{r exploratory_data_analysis_b, message=FALSE, warning=FALSE}
+#Build a histogram of show frequency (of ratings) of all users
+rating_data%>%
+  group_by(userId)%>%
+  count()%>%
+  ggplot()+aes(x=n)+geom_histogram(binwidth = 250)+
+  labs(title="Histogram of the number of ratings for all users", x="Number of ratings", y="Number of users")
+
+#filtering out users with fewer than 1k ratings to zoom plot
+rating_data%>%
+  group_by(userId)%>%
+  count()%>%
+  filter(n>1000)%>%
+  ggplot()+aes(x=n)+geom_histogram(binwidth = 250)+
+  labs(title="Histogram of the number of ratings for all users", x="Number of ratings", y="Number of users")
+```
+
+### Step 2: Data Engineering
+
+```{r data_engineering, message=FALSE, warning=FALSE}
+
+#(a) Select movies which have been viewed by at least 'm = 20' users
+topMovies20<- as.integer(as.character(names(which(table(rating_data$movieId) >= 20))))
+
+#(b) Select users who have rated at least 'n = 50' movies
+topUsers50 <- as.integer(as.character(names(which(table(rating_data$userId) >= 50))))
+
+#to only keep the ratings for movies which have been viewed by at least 'm = 20' users
+#and given by users which have rated at least 'n = 50' movies, we use:
+ratingData_topMovies20_topUsers50<-rating_data[intersect(which(rating_data$movieId %in% topMovies20), which(rating_data$userId %in% topUsers50))]
+
+
+#to do this for any given m or n, we can create a function:
+find_freq_users_movies <- function(rating_data, n, m){
+   topUsersN <- as.integer(as.character(names(which(table(rating_data$userId) > n))))
+   topMoviesM <- as.integer(as.character(names(which(table(rating_data$movieId) > m))))
+   
+   topUsersNLoc <- which(rating_data$userId %in% topUsersN)
+   topMoviesMLoc <- which(rating_data$movieId %in% topMoviesM)
+   intersectLoc <- intersect(topMoviesMLoc, topUsersNLoc)
+   ratingDataFreq <- rating_data[intersectLoc]
+   return(ratingDataFreq)
+}
+
+length(unique(rating_data$userId))
+length(unique(rating_data$movieId))
+
+#Now we <want to create the user-item matrix. The conventional method with dcast
+#cannot be used because the resulting matrix's size would exceed the local
+#memory. Thus we first need to create the user-item matrix as a dgCMatrix
+#object, which will have 162541 rows (unique userIds) and 58958 columns (unique movieIds). 
+#For this, we have to use the sparseMatrix function. However, we can't assign 
+#the current movieIds ascolumns because these are not consecutive numbers, and 
+#if we'll assign them as columns we'll get a matrix that has a lot more columns 
+#than there are movieIds (the maximum movie Id is over 200000). Hence, we need 
+#to covert the movieIds to consecutive numbers from 1 to 58958. To do this, we use:
+
+rating_data<-rating_data%>%
+  mutate(movieId2=match(movieId, sort(unique(rating_data$movieId))))
+
+ratings_matrix_sparse <- sparseMatrix(i = rating_data$userId, # row-location of non-zero entry
+  j = rating_data$movieId2, # column-location of non-zero entry
+  x = rating_data$rating #value of non-zero entry
+)      
+
+dim(ratings_matrix_sparse)
+
+#Now we convert the Sparse matrix to a realRatingMatrix
+ratings_matrix <- as(ratings_matrix_sparse, "realRatingMatrix")
+```
+
+### Step 3: Model Build
+
+```{r dataset_downsizing, message=FALSE, warning=FALSE}
+
+#The rating matrix needs to be downsized because otherwise it takes too long
+#to run and tune the recommendation systems. Therefore I randomly sampled 20k 
+#users and 7k movies:
+
+set.seed(100)
+users_reduced <- sample(x = c(TRUE, FALSE), size = dim(ratings_matrix)[1],
+                        replace = TRUE, prob = c(20000/dim(ratings_matrix)[1], 
+                                                 1-20000/dim(ratings_matrix)[1]))
+
+items_reduced <- sample(x = c(TRUE, FALSE),size = dim(ratings_matrix)[2],
+                        replace = TRUE, prob = c(7000/dim(ratings_matrix)[2], 
+                                                 1-7000/dim(ratings_matrix)[2]))
+
+#keep only sampled users and items
+ratings_matrix_reduced <- ratings_matrix[users_reduced, items_reduced]
+dim(ratings_matrix_reduced)
+
+#Now we create a function that only keeps the movies which have been rated by at least m users
+#and the users that have rated at least n movies
+ratings_matrix_reduced_n_m <- function(ratings_matrix_reduced, m, n){
+   ratings_matrix_reduced_n_m <- ratings_matrix_reduced[rowCounts(ratings_matrix_reduced)>=n, colCounts(ratings_matrix_reduced)>= m]
+   ratings_matrix_reduced_n_m<-ratings_matrix_reduced_n_m[rowCounts(ratings_matrix_reduced_n_m)>5,] #this is necessary to avoid an error from the given=-5 parameter in evaluationScheme in the upcoming code
+}
+
+#Create rating matrix with m=20, n=50
+ratings_matrix_reduced_20_50 <- ratings_matrix_reduced_n_m(ratings_matrix_reduced, 20, 50)
+dim(ratings_matrix_reduced_20_50)
+```
+
+
+```{r IBCF_model, message=FALSE, warning=FALSE}
+#Item based CF for m = 20, n=50
+
+# Creating an "evaluationScheme" object to check performance after tuning
+set.seed(100)
+eval <- evaluationScheme(ratings_matrix_reduced_20_50,
+                      method="split",
+                      train=0.8,
+                      given=-5)
+
+k_list=seq(20, 100, 10)
+RMSE <- list()
+
+for (i in k_list){
+  IBCF <- Recommender(getData(eval, "train"),
+                      method = "IBCF",
+                      param=list(normalize = "center",
+                                 method="Cosine",
+                                 k=i))
+    
+  # Calculating accuracy of Item-based model built
+  pred_IBCF <- predict(object = IBCF,
+                         newdata = getData(eval, "known"),
+                         type="ratings")
+    
+  
+  RMSE <- append(RMSE, calcPredictionAccuracy(x = pred_IBCF,
+                           data = getData(eval, "unknown"))[1])
+}
+
+plot(k_list, RMSE)
+
+#k=100 chosen as best with RMSE=0.9707961
+```
+
+
+```{r UBCF_model, message=FALSE, warning=FALSE}
+
+#User based CF for m = 20, n=50
+# Tuning the nn parameter of the User-based recommendation model
+
+nn_list=seq(20, 100, 10)
+RMSE <- list()
+
+for (i in nn_list){
+  UBCF <- Recommender(getData(eval, "train"),
+                    method = "UBCF",
+                    param=list(normalize = "center", method="cosine", nn=i))
+  
+  # Calculating accuracy of Item-based model built
+  pred_UBCF <- predict(object = UBCF,
+                     newdata = getData(eval, "known"),
+                     type="ratings")
+
+  
+  RMSE <- append(RMSE, calcPredictionAccuracy(x = pred_UBCF,
+                       data = getData(eval, "unknown"))[1])
+}
+
+plot(nn_list, RMSE)
+#nn=100 chosen as best with RMSE=0.8202749
+```
+```{r LIBMF_model, message=FALSE, warning=FALSE}
+
+# Checking parameters for Model-based CF with Matrix Factorization
+recommendation_system <- recommenderRegistry$get_entries(dataType ="realRatingMatrix")
+
+recommendation_system$LIBMF_realRatingMatrix$parameters #default parameters for LIBMF: dim=10, costp_l2=0.01, #costq_l2=0.01
+
+#Model-based CF with Matrix Factorization for m = 20, n=50
+#Tuning the dim parameter of the Model-based CF with Matrix Factorization
+
+dim_list=seq(5, 15)
+RMSE <- list()
+
+for (i in dim_list){
+  # Building the Recommender object for the LIBMF model
+  LIBMF <- Recommender(getData(eval, "train"),
+                       method = "LIBMF",
+                       param=list(dim = i, costp_l2=0.01, costq_l2=0.01))
+  
+  # Making predictions using "LIBMF" object and calculating accuracy
+  pred_LIBMF <- predict(object = LIBMF,
+                     newdata = getData(eval, "known"),
+                     type="ratings")
+
+  
+  RMSE <- append(RMSE, calcPredictionAccuracy(x = pred_LIBMF,
+                       data = getData(eval, "unknown"))[1])
+}
+
+plot(dim_list, RMSE)
+#dim=13 chosen as best with RMSE=0.7709103
+```
+
+>The lowest RMSEs achieved are thus: IBCF - 0.9707961 for k = 100, UBCF=0.8202749
+for nn=100, and LIMBF - 0.7709103 for dim=10. However, for tuning the m and n parameters
+in what follows, we will stick to k=nn=30 for IBCF and UBCF and dim=10 for LIMBF.
+
+
+
+### Step 4: Report on performance of model and parameter tuning (+Step 3 b)
+
+```{r tune_m_n, message=FALSE, warning=FALSE}
+
+# Defining set of values to use for movies and users thresholds (m and n)
+m <- c(10, 20, 50, 100, 200)
+n <- m
+models <- c("IBCF", "UBCF", "LIBMF")
+parameter_grid <- expand.grid(m, n, models)
+RMSE <- list()
+
+
+for(i in 1:nrow(parameter_grid)){
+  ratings_matrix_reduced_loop <- ratings_matrix_reduced_n_m(ratings_matrix_reduced, parameter_grid[i,2],parameter_grid[i,1])
+  set.seed(100)
+  eval_tune_loop <- evaluationScheme(ratings_matrix_reduced_loop,
+                             method="split",
+                             train=0.8,
+                             given=-5)
+  if(parameter_grid[i,3]=="IBCF"){
+    IBCF_loop <- Recommender(getData(eval_tune_loop, "train"),
+                             method = "IBCF",
+                             param=list(normalize = "center",
+                                        method="Cosine",
+                                        k=30))
+    
+    pred_IBCF_loop <- predict(object = IBCF_loop,
+                              newdata = getData(eval_tune_loop, "known"),
+                              type="ratings")
+    RMSE <- append(RMSE, calcPredictionAccuracy(x = pred_IBCF_loop,
+                                      data = getData(eval_tune_loop, "unknown"))[1])
+   
+  }else if(parameter_grid[i,3]=="UBCF"){
+    UBCF_loop <- Recommender(getData(eval_tune_loop, "train"),
+                             method = "UBCF",
+                             param=list(normalize = "center",
+                                        method="Cosine",
+                                        nn=30))
+    
+    pred_UBCF_loop <- predict(object = UBCF_loop,
+                         newdata = getData(eval_tune_loop, "known"),
+                         type="ratings")
+    
+    RMSE <- append(RMSE, calcPredictionAccuracy(x = pred_UBCF_loop,
+                                      data = getData(eval_tune_loop, "unknown"))[1])
+  
+    }else{
+    LIBMF_loop <- Recommender(getData(eval_tune_loop, "train"),
+                              method = "LIBMF",
+                              param=list(dim = 10, costp_l2=0.01, costq_l2=0.01))
+    
+    pred_LIBMF_loop <- predict(object = LIBMF_loop,
+                               newdata = getData(eval_tune_loop, "known"),
+                               type="ratings")
+    
+    RMSE <- append(RMSE, calcPredictionAccuracy(x = pred_LIBMF_loop,
+                                      data = getData(eval_tune_loop, "unknown"))[1])
+    }
+  #print(paste("loop ", as.character(i), " finished"))
+}
+
+
+# Attaching the RMSE to each model in parameter_grid
+RMSE_vector<-unlist(RMSE)
+parameter_grid$RMSE <- RMSE_vector
+```
+
+
+```{r assess_performance, message=FALSE, warning=FALSE}
+colnames(parameter_grid) <- c("m", "n", "Model", "RMSE")
+# Build a heat map plotting RMSEs for the three models
+ggplot(parameter_grid,
+       aes(x = as.factor(m), y = as.factor(n), fill = RMSE)) +
+  geom_tile() +
+  facet_wrap(~Model) +
+  geom_text(label=round(parameter_grid$RMSE, digits=3), colour = "white", size=3) +
+  labs(title = "RMSE performance by model",
+       x = "Threshold for movies",
+       y = "Threshold for users")
+
+parameter_grid%>%
+  arrange(RMSE)%>%
+  head(10)
+```
+>The model with the lowest RMSE is the LIMBF (Model-based Collaborative
+Filtering using Matrix Factorization) model with m=100 (movies with
+over 100 ratings) and n=100 (users with over 100 ratings). This model
+has and RMSE of 0.748. We can also see that for IBCF models, the RMSE generally
+decreases as we increase the threshold for users. On the other hand, for
+UBCF models, RMSE generally decreases as we increase the threshold for movies.
+For LIMBF models, there is no clear trend.
+
+
+
+
+
+
+
+
+
+
