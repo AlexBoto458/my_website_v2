@@ -125,8 +125,8 @@ theme = "forty"
 
     [[params.tiles.showcase]]
       title = "Predicting Movie Ratings Part 1"
-      subtitle = "Collaborative Filtering (User-Usergit  Item-Item Memory-Based, and Model-Based using Matrix Factorization)"
-      image = "Movie1.png"
+      subtitle = "Collaborative Filtering (User-User, Item-Item Memory-Based, and Model-Based using Matrix Factorization)"
+      image = "Movie11.jpg"
       url = "blogs/AM11_Part1_Alexandru_Botorog"
 
     #[[params.tiles.showcase]]
