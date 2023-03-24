@@ -164,7 +164,7 @@ theme = "forty"
     [[params.tiles.showcase]]
       title = "Author Matching & Word Search (Python)"
       subtitle = "File I/O, String Operations, Functions"
-      image = "Books.jpg"
+      image = "Author.jpg"
       url = "blogs/detect"
       
     [[params.tiles.showcase]]
