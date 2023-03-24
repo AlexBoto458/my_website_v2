@@ -140,13 +140,13 @@ theme = "forty"
     [[params.tiles.showcase]]
       title = "Movies Part 2: Extracting Features from Movie Tags"
       subtitle = "Text Mining & Principal Component Analysis"
-      image = "Movie11.jpg"
+      image = "Movie2.jpg"
       url = "blogs/Alexandru_Botorog_AM11_2023-Part_2"  
       
     [[params.tiles.showcase]]
       title = "Movies Part 3: Predicting Ratings using Extracted Features"
       subtitle = "Support Vector Machines & Neural Networks"
-      image = "Movie11.jpg"
+      image = "Movie3.jpg"
       url = "blogs/Alexandru_Botorog_AM11_2023-Part_3"
     
 
