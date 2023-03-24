@@ -64,8 +64,16 @@ theme = "forty"
       url = "blogs/Alexandru_Botorog_Final_Individual_Project"
       
     [[params.navigation.links]]
-      name = "Movie ratings Part 1"
+      name = "Movie Ratings Part 1"
       url = "blogs/AM11_Part1_Alexandru_Botorog"
+      
+    [[params.navigation.links]]
+      name = "Movie Ratings Part 2"
+      url = "blogs/Alexandru_Botorog_AM11_2023-Part_2"
+      
+    [[params.navigation.links]]
+      name = "Movie Ratings Part 3"
+      url = "blogs/Alexandru_Botorog_AM11_2023-Part_3"
 
     # Add custom links here by uncommenting code below. To remove links just delete
     # the [[params.navigation.links]] map associated with that link. Copy and paste
@@ -124,10 +132,23 @@ theme = "forty"
       url = "blogs/Alexandru_Botorog_Final_Individual_Project"
 
     [[params.tiles.showcase]]
-      title = "Predicting Movie Ratings Part 1"
-      subtitle = "Collaborative Filtering (User-User, Item-Item Memory-Based, and Model-Based using Matrix Factorization)"
+      title = "Movies Part 1: Predicting Ratings"
+      subtitle = "Collaborative Filtering Methods"
       image = "Movie11.jpg"
       url = "blogs/AM11_Part1_Alexandru_Botorog"
+      
+    [[params.tiles.showcase]]
+      title = "Movies Part 2: Extracting Features from Movie Tags"
+      subtitle = "Text Mining & Principal Component Analysis"
+      image = "Movie11.jpg"
+      url = "blogs/Alexandru_Botorog_AM11_2023-Part_2"  
+      
+    [[params.tiles.showcase]]
+      title = "Movies Part 3: Predicting Ratings using Extracted Features"
+      subtitle = "Support Vector Machines & Neural Networks"
+      image = "Movie11.jpg"
+      url = "blogs/Alexandru_Botorog_AM11_2023-Part_3"
+    
 
     #[[params.tiles.showcase]]
       #title = "Etiam"

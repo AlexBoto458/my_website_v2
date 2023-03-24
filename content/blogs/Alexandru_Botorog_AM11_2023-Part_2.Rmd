@@ -1,0 +1,264 @@
+---
+title: "AM11 Individual Assignment Part 2: Text Mining + PCA"
+author: "Alexandru Botorog"
+date: "2023-02-17"
+output:
+  html_document:
+    theme: cosmo
+    highlight: haddock
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(tm) # package for text mining  
+library(SnowballC) # for stemming words
+library(stringr) # package to count number of words in a string
+library(RWeka) # package for ngrams
+library(data.table) # for reading datasets faster
+library(purrr)
+```
+
+### Data Preprocessing
+
+Continue working with the MovieLens Data focusing on the distinct movies (specified by movieId variable) and the tags that users provided for that movie (specified by tag variable).
+In this section you will work with the large dataset of 25 million movie ratings. provided by ml-25m.zip located here: https://grouplens.org/datasets/movielens/25m/ 
+Within the zipped file you will find a csv file called "tags.csv".
+It contains 1 million tag observations provided by users for 62000 movies.  
+
+The overall task of Part 2 is two fold:
+- Perform Text Mining on the tag data to obtain a Document Term Matrix
+- Perform dimensionality reduction using PCA to obtain scores/coordinates (i.e. new features) which will be used in the next Part 3 with Christos.
+
+Start by reading in the dataset "ml-25m/tags.csv" and only keep the movieId and the tag columns (the resulting dimensionality should be 1,093,360 by 2).
+
+Next, create a dataframe called tb which contains unique movies with a single tag per each movie (i.e. aggregate the tags from different users per each movie into a single string).
+The resulting tb dimensionality should be 45,251 by 2.
+
+Next, only keep those movies (observations / rows) for which the string word count is 100 or more (i.e. for which the tag contains at least 100 words providing the users feedback on that movie). 
+This is to ensure that we have enough text for each movie which will become a document in the Document Term Matrix.
+The resulting tb dimensionality should be 2918 x 2.
+
+Lastly, remove any special characters from all of the tags.
+You may need to research the solution to this (an example solution could contain gsub() function). 
+
+```{r read_dataset, message=FALSE, warning=FALSE}
+
+# Reading tags.csv file and keeping "movieId" and "tags" columns
+tags <- fread("tags.csv")
+glimpse(tags)
+
+tags <- tags %>%
+  select(movieId, tag)
+
+dim(tags) # print dimensions
+```
+
+```{r aggregate_tags, message=FALSE, warning=FALSE}
+
+# Removing duplicated movieTags and aggregating tags
+tb <- tags %>%
+  group_by(movieId) %>%
+  summarise(all_tags = paste(tag, collapse = " "))
+
+dim(tb) # print dimensions
+```
+
+```{r keep_long_tags, message=FALSE, warning=FALSE}
+# Filter for tags with at least 100 words
+tb <- tb %>%
+  filter(sapply(strsplit(all_tags, " "), length) > 100)
+
+dim(tb)
+```
+
+```{r  remove_special_characters, message=FALSE, warning=FALSE}
+# Removing special characters, i.e. all characters that are not
+#alphanumeric, from from all_tags, replacing them with white space.
+tb <- tb %>%
+  mutate(all_tags = gsub("[^a-zA-Z0-9]", " ", all_tags))
+```
+
+### Text Mining 
+
+Your task is to build a Document Term Matrix containing individual movies as documents and terms/words occurring in tags as columns. 
+Hint: when loading data from a dataframe you can use Corpus(VectorSource())
+
+It is up to you to decide the best way to preprocess the data: e.g. make all words lower case, remove punctuation etc.
+You may decide to remove sparse terms, if you do, explain what you did and how you did it. 
+Also you should decide if you should create DTM-TF, DTM-TFIDF, bigram based DTM etc, and justify your answer.
+Ensure to explain each of your data preprocessing decisions.
+Think carefully about how your data will be used (i.e. you are using text mining and PCA to create features to be used in further analysis such as SVM).
+
+If you decide to create a DTM that also contains bigrams, you should be careful as your matrix will become sparse very quickly. 
+After addressing the sparsity, please report the number of bigrams that is present in your final DTM.
+Hints: to use bigrams research:
+- library(RWeka) 
+- VCorpus() and VectorSource() functions
+- NGramTokenizer() and Weka_control() functions
+
+```{r text_mining, message = FALSE, warning = FALSE}
+
+# Creating the Corpus, a single file containing all of text files (movie tags) to
+# be analysed:
+tags_corpus <- VCorpus(VectorSource(tb$all_tags))
+
+
+# Creating the Bigrams function to allows for Bi-grams in the DTM
+Bigrams <- function(x){
+  NGramTokenizer(x, Weka_control(min=1, max=2))
+}
+
+# Converting corp_tags into a DocumentTermMatrix object:
+
+tags_DTM <- DocumentTermMatrix(tags_corpus, control = list(
+            tolower = TRUE, # Converts all tokens to lowercase
+            removeNumbers = FALSE, # I decided to keep numbers to capture constructs 
+            #such as "IMDB top 250"
+            stopwords = TRUE, # Removes common words that don't provide information
+            removePunctuation = TRUE, # Done previously as well
+            stripWhitespace = TRUE, # Removes white space characters
+            tokenize = Bigrams, # incorporating bigrams in theDTM
+            wordLengths=c(3, Inf), # no tokens shorter than 3 characters
+            weighting=weightTfIdf)) # normalize term frequency
+
+dim(tags_DTM) # print dimensions of DTM
+inspect(tags_DTM[,c(1:5)]) # inspecting content of DTM
+
+
+# Removing sparse tokens from the DTM
+tags_DTM <- removeSparseTerms(tags_DTM, 1-25/nrow(tags_DTM)) # remove tokens
+#that appear in less than 25 tags
+
+# Checking for dimensions of new DTM
+dim(tags_DTM)
+
+# Printing the first five terms of the new DTM
+inspect(tags_DTM[,c(1:5)]) # inspecting content of DTM
+
+# Return the number of bi-grams in the DTM
+sum(sapply(strsplit(tags_DTM$dimnames$Terms, " "), length) > 1)
+   
+```
+
+>I have decided to add bi-grams to the DTM in order to identify possible
+relationships between words (words that follow each other immediately). I 
+believe that in short tags about movies such as these, it is certain that there
+are some prominent two-word constructs which we need to capture. This has 
+indeed been the case as 983 out of the 2677 terms (over a third) in the final 
+DTM are bi-grams. 
+
+>I also decided to normalize term frequency in order to increase the weight of
+terms that appear in fewer tags, and decrease the weight of those that are very
+common.
+
+>Lastly, in order to deal with sparsity, I decided to remove any terms that 
+appear in less than 25 tags (which is roughly 0.86% of tags). Terms that appear
+less often probably do not convey any relevant information.
+
+### Principle Component Analysis
+
+Now that you have a DTM, we can use it in an unsupervised machine learning algorithm that can reduce the dimensionality of the data. 
+Specifically we have terms/words that describe each movie, however likely we have way too many columns and should only use a reduced amount of columns in our further analysis.
+For example you may wish to run a classification algorithm such as an SVM as a final step in order to be able to create a model that can predict a movie's rating based on some features, including the features produced as a result of running the PCA. 
+
+Therefore your next task is to run the PCA on the Document Term Matrix that you designed above.
+As a result of the PCA you should provide the PC coordinates/scores to be used as features in Part 3.
+Crucially, you must decide on the number of these new columns (containing the PC scores) that should be used, i.e. report what dimensionality you started with (your final DTM number of columns) and what dimensionality you decided to reduce the data to (number of PCs you decide to keep).
+Report your key decisions:
+- PCA data preprocessing 
+- Analysis of the variance
+- Reasons for keeping the number of PCs you decided to keep
+As the final step ensure to extract and save the relevant number of new columns (containing the PC scores).
+
+```{r PCA_data_preprocessing, message=FALSE, warning=FALSE}
+# Converting the DTM object to a tibble
+tags_DTM_tbl <- as_tibble(as.matrix(tags_DTM))
+
+# Running PCA on the DTM
+tags_pca <- prcomp(tags_DTM_tbl, center = TRUE, scale. = TRUE) # centering and standardizing
+#necessary as some terms may appear much more often in tags than others
+```
+
+>We can now perform analysis of variance.
+
+```{r analysis_of_variance, message=FALSE, warning=FALSE}
+# Variance Explained by each PC
+VE <- tags_pca$sdev^2
+
+# Percentage of Variance Explained by each PC
+PVE <- VE/sum(VE)*100
+
+# Cumulative Percentage of Variance Explained
+CPVE <- cumsum(PVE)
+
+# Creating Data frame object containing data about the Variance Explained 
+# by each PC
+tags_pca_variance <- data.frame(PC = c(1:ncol(tags_DTM_tbl)), 
+                 var_explained = VE,
+                 perc_var_explained = PVE,
+                 cum_sum_PVE = CPVE)
+
+# Building Scree Plot of the Variance Explained
+tags_pca_variance %>%
+  ggplot(aes(x = PC, y = var_explained)) +
+  geom_point(size = 0.2) +
+  geom_line(size=0.2) + 
+  scale_x_continuous(breaks = seq(0,nrow(tags_pca_variance),250)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red", size = 1.2) +
+  labs(x = "PC Number", y = "VE", 
+       title = "Scree Plot", 
+       subtitle = "PCA on movie tags Document Term Matrix") +
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15, face = "bold", color = "blue"),
+        plot.title = element_text(size = 18, color = "blue"),
+        plot.subtitle = element_text(size = 15, color = "blue"))
+
+# The scree plot flattens somewhere between the 500th and 1000th PC. However,
+# it is hard to pinpoint exactly where the flattening out occurs since the 
+# flattening is very gradual. We can look for other criteria to decide how many
+# PCs to keep. For example, we could keep the PCs for which variance is at least
+# 1, or we could keep the PCs which give 60%-80% of cumulative variance (CPVE).
+
+match(TRUE, (tags_pca_variance$var_explained<1))
+# The 860th PC is the first PC with a Variance Explained which is lower than 1. 
+tags_pca_variance$cum_sum_PVE[859]
+# The first 859 PCs explain 82.64% of the variation.
+
+# CUMULATIVE PROPORTION VARIANCE EXPAINED, CPVE
+tags_pca_variance %>%
+  ggplot(aes(x = PC, y = cum_sum_PVE/100)) +
+  geom_point(size = 0.2) +
+  ylim(0.3, 1) +
+  scale_x_continuous(breaks = seq(0,nrow(tags_pca_variance),250)) +
+  geom_hline(yintercept = 0.8, linetype = "dashed", color = "red", size = 1.2) +
+  geom_vline(xintercept = 6, linetype = "dashed", color = "red", size = 1.2) +
+  labs(x = "PC", y = "CPVE", title = "Cumulative Proportion Variance Explained Plot", subtitle = "PCA on movie tags Document Term Matrix")+
+  theme(axis.text = element_text(size = 15),
+        axis.title = element_text(size = 15, face = "bold", color = "blue"),
+        plot.title = element_text(size = 18, color = "blue"),
+        plot.subtitle = element_text(size = 15, color = "blue"))
+
+match(TRUE, (tags_pca_variance$cum_sum_PVE/100>0.8))
+# The first 792 PCs explain 80% of the variation.
+```
+
+> After looking at all the plots above, keeping around 800 PCs seems to be
+optimal. These PCs explain slightly over 80% of the variation, and the 800th PC 
+has a variance explained of roughly 1.03, which is very close to 1. However, to
+reduce the computational complexity of the upcoming prediction algorithms, I 
+will only keep the first 10 PCs.
+
+```{r saving_final_PCs, message=FALSE, warning=FALSE}
+# Dataset containing the PCs I decided to keep (first 800)
+tags_final_PCs <- tags_pca$x[,c(1:10)]
+dim(tags_final_PCs) # Print dimensions
+
+#merging the movieIds to the PCs
+tags_final_PCs<-as.tibble(cbind(tags_final_PCs, movieId = tb$movieId))
+write.csv(tags_final_PCs, "tags_final_PCs.csv")
+```

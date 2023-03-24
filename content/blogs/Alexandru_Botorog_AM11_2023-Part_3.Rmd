@@ -1,0 +1,401 @@
+---
+title: "AM11 Individual Assignment Part 3 (SVM and Neural Netowrks)"
+author: "Alexandru Botorog"
+date: "2023-02-17"
+output:
+  html_document:
+    theme: cosmo
+    highlight: haddock
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(stringr)
+library(data.table)
+library(purrr)
+library(rsample) # Splitting Dataset
+library(caret) # Efficient algorithms training
+library(kernlab) # SVM
+library(e1071) # SVM
+```
+
+### Data Preprocessing
+
+```{r data_loading, message = FALSE, warning=FALSE}
+tags_final_PCs <- fread("tags_final_PCs.csv")%>%select(2:12)
+glimpse(tags_final_PCs)
+
+movie_data <- fread("movies.csv")
+glimpse(movie_data)
+
+rating_data <- fread("ratings.csv")
+glimpse(rating_data)
+```
+
+```{r data_cleaning, message = FALSE, warning=FALSE}
+
+# We need to remove duplicate movieIds from movie_data and rating_data
+
+# Check if there are duplicates
+movie_data%>%
+  group_by(title)%>%
+  count()%>%
+  filter(n>1)
+# Yes, 98 movie titles with more than 1 movieId
+
+# Titles of duplicated movies in movie_data
+duplicated_movies <- names(which(table(movie_data$title) > 1)) 
+
+# MovieIDs of duplicated movies
+duplicated_movie_Ids<-c()
+for(i in duplicated_movies){
+  duplicated_movie_Ids<-append(duplicated_movie_Ids, movie_data[which(movie_data$title == i)]$movieId)
+}
+
+# MovieIds in the tags_final_PCs dataset that have duplicates in movie_data and rating_data
+duplicated_Ids_in_features<-duplicated_movie_Ids[which(duplicated_movie_Ids %in% tags_final_PCs$movieId)]
+
+# Removing the duplicates of the movieIds in the tags_final_PCs dataset that have 
+# duplicates in movie_data and rating_data
+removeRows <- integer()
+for(i in duplicated_Ids_in_features){
+  repeatMovieLoc<-which(movie_data$title == movie_data$title[which(movie_data$movieId == i)])
+  tempGenre <- paste(movie_data$genres[repeatMovieLoc], collapse="|")
+  tempGenre <- paste(unique(unlist(strsplit(tempGenre, split = "\\|")[[1]])), collapse = "|")
+  movie_data$genres[repeatMovieLoc] <- tempGenre
+  
+  removeRows <- c(removeRows, repeatMovieLoc[which(movie_data$movieId[repeatMovieLoc]!=i)])
+    
+  repeatMovieIdLoc <- which(rating_data$movieId %in% movie_data$movieId[repeatMovieLoc])
+  rating_data$movieId[repeatMovieIdLoc] <- i
+}
+
+removeRows
+movie_data <- movie_data[-removeRows,]
+
+#Now we only keep the observations from the features dataset
+
+rating_data<-rating_data%>%
+  filter(movieId %in% tags_final_PCs$movieId)
+  
+movie_data<-movie_data%>%
+  filter(movieId %in% tags_final_PCs$movieId)
+
+#Check if multiple ratings from the same user for a single movie
+nrow(rating_data)-nrow(rating_data%>%select(userId, movieId)%>%distinct())
+
+#Only keep maximum rating from each user
+rating_data<-rating_data %>%arrange(desc(rating))%>%distinct(userId, movieId, .keep_all = TRUE)
+
+# Now we can calculate the average rating across movies from the features dataset
+rating_data <- rating_data %>%
+  group_by(movieId) %>%
+  summarise(avg_rating = mean(rating))
+
+# Joining the three datasets together
+rating_movie_data<-left_join(rating_data, movie_data, by = c("movieId"="movieId"))
+
+ratings_final <- left_join(rating_movie_data, tags_final_PCs,
+                           by = c("movieId"="movieId"))
+
+# Creating a vector with all the genres
+genres <- unique(unlist(strsplit(movie_data$genres, split = "\\|")))
+
+# Adding genre dummy variables to ratings_final
+for(i in genres){
+  ratings_final <- data.frame(ratings_final, 
+                              as.numeric(str_detect(ratings_final$genres, i)))
+}
+
+# Setting appropriate names for the dummy genre columns
+colnames(ratings_final)[15:34] <- genres
+
+# Removing title and genres columns
+ratings_final <- ratings_final %>%
+  select(-genres, -title)
+```
+
+### SVM Task
+
+```{r SVM_radial, message = FALSE, warning=FALSE}
+
+# Adding a variable for whether a movie has a rating above 3.75
+ratings_final<-ratings_final%>%
+  mutate(excellent=as.factor(avg_rating>3.75))
+
+# Splitting ratings_final dataset into training and testing
+set.seed(1)  # for reproducibility
+ratings_split <- initial_split(ratings_final, prop = 0.8, strata="excellent")
+ratings_train <- training(ratings_split)
+ratings_test  <- testing(ratings_split)
+
+# Training a support vector machine with radial basis function Kernel on
+# ratings_train, tuning for cost parameter C and sigma parameter of the radial
+# kernel
+
+set.seed(100)
+ratings_svm_radial_tune1 <- train(
+  excellent ~. -movieId-avg_rating, 
+  data = ratings_train,
+  method = "svmRadial", # Radial kernel      
+  metric="Accuracy",
+  preProcess = c("center", "scale"),  # center & scale the data
+  trControl = trainControl(method = "cv", number = 5), #cross-validation (5-fold)
+  tuneGrid = expand.grid(sigma = 10^(-4:0), C = 10^(-2:2)))
+
+ratings_svm_radial_tune1
+ggplot(ratings_svm_radial_tune1) + theme_light()
+
+#values around sigma=0.001-0.01 and C=10-100 seem to to the best job
+
+set.seed(100)
+ratings_svm_radial_tune2 <- train(
+  excellent ~. -movieId-avg_rating, 
+  data = ratings_train,
+  method = "svmRadial", # Radial kernel      
+  metric="Accuracy",
+  preProcess = c("center", "scale"),  # center & scale the data
+  trControl = trainControl(method = "cv", number = 5), #cross-validation (5-fold) 
+  tuneGrid = expand.grid(sigma = seq(0.001, 0.011, 0.002), C = seq(10, 110, 20)))
+
+ratings_svm_radial_tune2
+ggplot(ratings_svm_radial_tune2) + theme_light()
+
+# The final values used for the model were sigma = 0.001 and C = 90, and the
+# the best accuracy achieved was 0.7933986.
+
+# confusionMatrix of svm classifier on training set
+confusionMatrix(ratings_svm_radial_tune2)
+
+# Model validation on the test set
+Radial_test_prediction <- predict(ratings_svm_radial_tune2, ratings_test)
+confusionMatrix(data = Radial_test_prediction, ratings_test$excellent)
+
+# Accuracy of the radial model on the testing dataset is 0.8034.
+```
+
+```{r  SVM_polynomial, message = FALSE, warning=FALSE}
+# Training a support vector machine with polynomial Kernel on ratings_train,
+# tuning for cost parameter C and for the degree of the polynomial
+
+set.seed(100)
+fit.tune <- tune.svm(excellent ~. -movieId-avg_rating, kernel= "polynomial", 
+                     type="C-classification", data = ratings_train, degree=2:4, cost = 10^(-2:2),
+                     cross=5)
+
+summary(fit.tune)
+fit.tune
+
+polynomial_train_pred <- predict(fit.tune$best.model, ratings_train)
+confusionMatrix(data = polynomial_train_pred, ratings_train$excellent)
+
+# The final values used for the model were degree = 3 and cost = 10, and the
+# the accuracy achieved was 0.8761.
+
+Polynomial_test_prediction <- predict(fit.tune$best.model, ratings_test)
+confusionMatrix(data = Polynomial_test_prediction, ratings_test$excellent)
+
+# Accuracy of polynomial model on the testing dataset is 0.7726.
+```
+>Thus, the best model according to out-of-sample performance is 
+the radial SVM with sigma = 0.001 and C = 90.
+
+>There are no overfitting problems with the radial model as it achieves an out-of-sample
+performance which is very simiar to in-sample performance. In addition, 5-fold cross
+validation was used to select the hyperparameters.
+
+```{r  logistic_regression, message = FALSE, warning=FALSE}
+# Now we proceed to compare the radial SVM model with a logistic regression 
+# in order to understand the relative effective of the SVM algorithm
+
+logistic <- glm(excellent ~ .-movieId-avg_rating,family="binomial", ratings_train)
+summary(logistic)
+
+# probability of movie being excellent 
+logistic_test_pred<-predict(logistic, ratings_test, type="response")
+
+# Binary prediction with a threshold of 0.5
+logistic_test_pred_binary<-ifelse(logistic_test_pred>0.5, TRUE, FALSE)
+
+#Confusion Matrix
+confusionMatrix(as.factor(logistic_test_pred_binary), ratings_test$excellent)
+
+# Accuracy of polynomial model on the testing dataset is 0.788.
+```
+
+> We can see that the performance of the Radial SVM classifier is superior
+to that of logistic regression.
+
+```{r SVM_with_different_threshold, message = FALSE, warning=FALSE}
+
+# Setting excellent movie threshold at 4
+ratings_final<-ratings_final%>%
+  mutate(excellent=as.factor(avg_rating>4))
+
+# Splitting ratings_final dataset into training and testing
+set.seed(1)  # for reproducibility
+ratings_split <- initial_split(ratings_final, prop = 0.8, strata="excellent")
+ratings_train <- training(ratings_split)
+ratings_test  <- testing(ratings_split)
+
+# Training radial SVM on new dataset
+
+set.seed(10)
+rating_svm_radial_tune_3 <- train(
+  excellent ~. -movieId-avg_rating, 
+  data = ratings_train,
+  method = "svmRadial", # Radial kernel      
+  metric="Accuracy",
+  preProcess = c("center", "scale"),  # center & scale the data
+  trControl = trainControl(method = "cv", number = 5), #cross-validation (5-fold)
+  tuneLength=10)
+
+rating_svm_radial_tune_3
+ggplot(rating_svm_radial_tune_3) + theme_light()
+
+# The final values used for the model were sigma = 0.030212 and C=16, and the
+# the accuracy achieved was 0.9314.
+
+# confusionMatrix of svm classifier on training set
+confusionMatrix(rating_svm_radial_tune_3)
+
+# Model validation on the test set
+Poly_test_pred_2 <- predict(rating_svm_radial_tune_3, ratings_test)
+confusionMatrix(data = Poly_test_pred_2, ratings_test$excellent)
+
+# Accuracy of svm model on the testing dataset is 0.9041.
+```
+
+> We can see that the performance of the SVM classifier increases considerably
+after changing the threshold for excellent movies from 3.75 to 4, as the 
+accuracy of the model has jumped from around 0.8 to over 0.9.
+
+> This result could be explained by the fact that a higher threshold
+creates a better, more clear separation between excellent and 
+non-excellent movies, which might have made it easier for the SVM model to
+separate the two classes in the infinite dimensional space.
+
+### ANN Task
+
+```{r ann_preprocessing, warning=FALSE, message=FALSE}
+#NN libraries
+library(recipes) # Compiling neural nets
+library(keras) # Training & Building neural nets
+
+ratings_final<-ratings_final%>%
+  select(-movieId, -excellent)
+
+set.seed(1)  # for reproducibility
+ratings_split <- initial_split(ratings_final, prop = 0.8)
+ratings_train <- training(ratings_split)
+ratings_test  <- testing(ratings_split)
+
+# Create recipe
+recipe_obj <- recipe(avg_rating ~ ., data = ratings_train) %>%
+  step_center(all_numeric_predictors(), -all_outcomes()) %>%
+  step_scale(all_numeric_predictors(), -all_outcomes()) %>%
+  prep(data = ratings_train)
+
+# Create X and Y sets
+x_train <- bake(recipe_obj, new_data = ratings_train) %>% select(-avg_rating)
+x_test  <- bake(recipe_obj, new_data = ratings_test) %>% select(-avg_rating)
+y_train <- ratings_train$avg_rating
+y_test <- ratings_test$avg_rating
+
+#We can now fit the  NN
+```
+
+```{r ann_tune, warning=FALSE, message=FALSE}
+# Creating model_keras
+model_keras <- keras_model_sequential()
+
+# Defining the architecture
+model_keras %>% 
+  
+  # First hidden layer
+  layer_dense(
+    units              = 16, 
+    kernel_initializer = "uniform", 
+    activation         = "relu", 
+    input_shape        = ncol(x_train)) %>% 
+  
+  # Dropout to prevent overfitting
+  layer_dropout(rate = 0.3) %>%
+  
+  # Second hidden layer
+  layer_dense(
+    units              = 16, 
+    kernel_initializer = "uniform", 
+    activation         = "relu") %>% 
+  
+  # Dropout to prevent overfitting
+  layer_dropout(rate = 0.3) %>%
+  
+  # Third hidden layer
+  layer_dense(
+    units              = 16,
+    kernel_initializer = "uniform", 
+    activation         = "relu") %>%
+  
+  # Dropout to prevent overfitting
+  layer_dropout(rate = 0.3) %>%
+  
+  # Output layer
+  layer_dense(
+    units              = 1,
+    kernel_initializer = "uniform", 
+    activation         = "relu") %>% 
+  
+  # Compile NN
+  compile(
+    optimizer = optimizer_rmsprop(),
+    loss      = 'mean_squared_error',
+    metrics   = c('mean_squared_error')
+  )
+
+#display model architecture
+model_keras
+
+# Tuning the model
+history_ann <- fit(
+  object = model_keras,
+  x = as.matrix(x_train),
+  y = y_train,
+  batch_size = 50,
+  epochs = 50,
+  validation_split = 0.30 #to include 30% of the data for model validation, which prevents overfitting.
+)
+```
+
+> The NN architecture is comprised of 3 hidden layers that have 16 cells each. The
+relu activation function is used to train the NN. 
+
+```{r Predicting with ANN, message = FALSE, warning=FALSE}
+
+# ANN Predictions for test data
+ANN_test_pred <- model_keras %>%
+  predict(as.matrix(x_test), batch_size = 50)
+
+# Computing the out-of-sample RMSE
+RMSE(ANN_test_pred, y_test)
+```
+
+> The RMSE of the ANN is around 0.3.
+
+```{r compare_with_lm, message = FALSE, warning=FALSE}
+
+# Estimating Linear Regression Model
+linear_regr <- lm(avg_rating ~ ., data=ratings_train)
+
+# Calculating out-of-sample predictions for the Linear Model
+linear_test_pred <- predict(linear_regr, ratings_test)
+
+# Calculating out-of-sample RMSE for Linear Regression
+RMSE(linear_test_pred, ratings_test$avg_rating)
+```
+> The linear regression has an RMSE performance of 0.2975382. Therefore, our
+ANN performs similar to the linear regression.
