@@ -74,6 +74,14 @@ theme = "forty"
     [[params.navigation.links]]
       name = "Movie Ratings Part 3"
       url = "blogs/Alexandru_Botorog_AM11_2023-Part_3"
+      
+    [[params.navigation.links]]
+      name = "Covid-19 Statistics"
+      url = "https://public.tableau.com/app/profile/alexandru.victor.botorog/viz/CovidDashboard_16701117489710/Dashboard1"
+
+    [[params.navigation.links]]
+      name = "Covid-19 Effect on London Housing Market"
+      url = "https://public.tableau.com/app/profile/alexandru.victor.botorog/viz/LondonHousePricesStory_16701115843850/Story1"
 
     # Add custom links here by uncommenting code below. To remove links just delete
     # the [[params.navigation.links]] map associated with that link. Copy and paste
@@ -148,6 +156,18 @@ theme = "forty"
       subtitle = "Support Vector Machines & Neural Networks"
       image = "Movie3.jpg"
       url = "blogs/Alexandru_Botorog_AM11_2023-Part_3"
+      
+    [[params.tiles.showcase]]
+      title = "Visualizing Covid-19 Statistics"
+      subtitle = "Tableau Dashboard"
+      image = "covid19.jpg"
+      url = "https://public.tableau.com/app/profile/alexandru.victor.botorog/viz/CovidDashboard_16701117489710/Dashboard1"
+      
+    [[params.tiles.showcase]]
+      title = "Explaining Covid-19's Effect on London's Housing Market"
+      subtitle = "Tableau Story"
+      image = "London1.jpg"
+      url = "https://public.tableau.com/app/profile/alexandru.victor.botorog/viz/LondonHousePricesStory_16701115843850/Story1"
     
 
     #[[params.tiles.showcase]]
