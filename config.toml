@@ -90,6 +90,10 @@ theme = "forty"
     [[params.navigation.links]]
       name = "Online Advertising Campaign"
       url = "blogs/Workshop 1 - Optimal Advertising Campaigns" 
+      
+    [[params.navigation.links]]
+      name = "Bike Sharing in NY"
+      url = "blogs/Workshop 2 -- Optimization at Citibike Alexandru Botorog" 
 
     # Add custom links here by uncommenting code below. To remove links just delete
     # the [[params.navigation.links]] map associated with that link. Copy and paste
@@ -188,6 +192,12 @@ theme = "forty"
       subtitle = "Linear Programming"
       image = "Advert.jpg"
       url = "blogs/Workshop 1 - Optimal Advertising Campaigns"
+
+    [[params.tiles.showcase]]
+      title = "Optimizing Rebalancing for a Bike Sharing Platform in NY (Python)"
+      subtitle = "Integer Programming"
+      image = "NY_Bike.jpg"
+      url = "blogs/Workshop 2 -- Optimization at Citibike Alexandru Botorog"
 
     #[[params.tiles.showcase]]
       #title = "Etiam"
