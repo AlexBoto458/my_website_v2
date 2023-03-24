@@ -184,28 +184,6 @@ theme = "forty"
     # For more informtion take a look at the README.
     # To add more blogs just copy and paste the code.
 
-  # Section Type Two
-  [params.two]
-    enable = true
-    title = "My coding experience"
-    subtitle = """I possess significant coding experience with Python and R 
-    and I am able to use them for both regular applications and data analytics. 
-    I began using Python in my first academic year at UCL when I took the 
-    Introduction to Programming elective. I quickly developed a good 
-    understanding of programming algorithms and obtained a mark of 80 in that 
-    module. The following summer I took an online course called Introduction to 
-    Data Science in Python, which is where my interest in data science
-    originated from. The first time I have used R was in my final academic
-    year at UCL when I had to estimate the Value-at-Risk (VaR) of an equally 
-    weighted portfolio holding two stock indices, S&P500 and DAX, using a Monte 
-    Carlo simulation approach based on copula theory. I have since begun using R
-    more frequently as part of my Masters in Analytics and Management programme
-    at LBS. Other software programmes I have significant experience with include
-    Mathematica, Stata, and Excel. By clicking the button below you can see
-    some examples of code I have written in R."""
-    buttonText = "Get Started"
-    url = "blogs"
-
 
   # Contact section
   [params.contact]
@@ -254,15 +232,15 @@ theme = "forty"
      # url= "https://www.twitter.com"
      # label = "Twitter"
 
-    [[params.footer.social]]
-      icon = "fa-facebook"
-      url= "https://www.facebook.com/alex.boto.1/"
-      label = "Facebook"
+    #[[params.footer.social]]
+      #icon = "fa-facebook"
+      #url= "https://www.facebook.com/alex.boto.1/"
+      #label = "Facebook"
 
-    [[params.footer.social]]
-      icon = "fa-instagram"
-      url= "https://www.instagram.com/alex.boto.1/"
-      label = "Instagram"
+    #[[params.footer.social]]
+      #icon = "fa-instagram"
+      #url= "https://www.instagram.com/alex.boto.1/"
+      #label = "Instagram"
     
     [[params.footer.social]]
       icon = "fa-github"
