@@ -194,7 +194,7 @@ theme = "forty"
       url = "blogs/Workshop 1 - Optimal Advertising Campaigns"
 
     [[params.tiles.showcase]]
-      title = "Optimizing Rebalancing for a Bike Sharing Platform in NY (Python)"
+      title = "Optimizing the Rebalancing Operations of a Bike Sharing Platform in NY (Python)"
       subtitle = "Integer Programming"
       image = "NY_Bike.jpg"
       url = "blogs/Workshop 2 -- Optimization at Citibike Alexandru Botorog"
