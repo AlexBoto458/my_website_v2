@@ -76,6 +76,10 @@ theme = "forty"
       url = "blogs/Alexandru_Botorog_AM11_2023-Part_3"
       
     [[params.navigation.links]]
+      name = "Author Matching"
+      url = "blogs/detect"  
+      
+    [[params.navigation.links]]
       name = "Covid-19 Statistics"
       url = "https://public.tableau.com/app/profile/alexandru.victor.botorog/viz/CovidDashboard_16701117489710/Dashboard1"
 
@@ -128,34 +132,40 @@ theme = "forty"
       url = "https://drive.google.com/file/d/1Hzfwj0XfdAdhCdzJWhXNUVWXDqyQR_Xz/view?usp=share_link"
 
     [[params.tiles.showcase]]
-      title = "Predicting Loan Defaults at Lending Club"
+      title = "Predicting Loan Defaults at Lending Club (R)"
       subtitle = "Logistic Regression"
       image = "peer-to-peer_lending.jpg"
       url = "blogs/LogisticWorkshop2022"
 
     [[params.tiles.showcase]]
-      title = "Predicting London House Prices"
+      title = "Predicting London House Prices (R)"
       subtitle = "Linear Regression, Decision Trees, KNN, Random Forests, Gradient Boosting, Stacking"
       image = "London_house.jpg"
       url = "blogs/Alexandru_Botorog_Final_Individual_Project"
 
     [[params.tiles.showcase]]
-      title = "Movies Part 1: Predicting Ratings"
+      title = "Movies Part 1: Predicting Ratings (R)"
       subtitle = "Collaborative Filtering Methods"
       image = "Movie11.jpg"
       url = "blogs/AM11_Part1_Alexandru_Botorog"
       
     [[params.tiles.showcase]]
-      title = "Movies Part 2: Extracting Features from Movie Tags"
+      title = "Movies Part 2: Extracting Features from Movie Tags (R)"
       subtitle = "Text Mining & Principal Component Analysis"
       image = "Movie2.jpg"
       url = "blogs/Alexandru_Botorog_AM11_2023-Part_2"  
       
     [[params.tiles.showcase]]
-      title = "Movies Part 3: Predicting Ratings using Extracted Features"
+      title = "Movies Part 3: Predicting Ratings using Extracted Features (R)"
       subtitle = "Support Vector Machines & Neural Networks"
       image = "Movie3.jpg"
       url = "blogs/Alexandru_Botorog_AM11_2023-Part_3"
+      
+    [[params.tiles.showcase]]
+      title = "Author Matching & Word Search (Python)"
+      subtitle = "File I/O, String Operations, Functions"
+      image = "Books.jpg"
+      url = "blogs/detect"
       
     [[params.tiles.showcase]]
       title = "Visualizing Covid-19 Statistics"
