@@ -84,8 +84,12 @@ theme = "forty"
       url = "https://public.tableau.com/app/profile/alexandru.victor.botorog/viz/CovidDashboard_16701117489710/Dashboard1"
 
     [[params.navigation.links]]
-      name = "Covid-19 Effect on London Housing Market"
+      name = "Covid-19's Effect on London's Housing Market"
       url = "https://public.tableau.com/app/profile/alexandru.victor.botorog/viz/LondonHousePricesStory_16701115843850/Story1"
+
+    [[params.navigation.links]]
+      name = "Online Advertising Campaign"
+      url = "blogs/Workshop 1 - Optimal Advertising Campaigns" 
 
     # Add custom links here by uncommenting code below. To remove links just delete
     # the [[params.navigation.links]] map associated with that link. Copy and paste
@@ -179,6 +183,11 @@ theme = "forty"
       image = "London1.jpg"
       url = "https://public.tableau.com/app/profile/alexandru.victor.botorog/viz/LondonHousePricesStory_16701115843850/Story1"
     
+    [[params.tiles.showcase]]
+      title = "Optimizing an Online Advertising Campaign (Python)"
+      subtitle = "Linear Programming"
+      image = "Advert.jpg"
+      url = "blogs/Workshop 1 - Optimal Advertising Campaigns"
 
     #[[params.tiles.showcase]]
       #title = "Etiam"
